@@ -1,0 +1,524 @@
+openapi: 3.0.0
+info:
+  title: Booking Service API
+  version: 0.0.0
+tags: []
+paths:
+  /api/event-types:
+    get:
+      operationId: PublicEventTypes_list
+      summary: Публичный каталог типов событий
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventType'
+  /api/event-types/{id}:
+    get:
+      operationId: PublicEventTypes_get
+      summary: Получить тип события по id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: Ресурс не найден (например, неизвестный id типа события).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+  /api/event-types/{id}/bookings:
+    post:
+      operationId: PublicEventTypes_createBooking
+      summary: Создать бронирование и вернуть подтверждение. Атомарная проверка занятости start_at.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingConfirmation'
+        '404':
+          description: Ресурс не найден (например, неизвестный id типа события).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '409':
+          description: 'Конфликт занятости: на этот start_at уже существует бронирование.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotConflictError'
+        '422':
+          description: |-
+            Ошибка валидации запроса или нарушение бизнес-правила занятости/окна:
+            - validation_failed — поле запроса не прошло проверку (формат email, длина имени и т.п.);
+            - slot_outside_window — выбранная дата вне 14-дневного окна;
+            - slot_outside_hours — время вне 06:00–22:00 MSK;
+            - slot_in_past — start_at уже в прошлом;
+            - invalid_duration — duration_minutes ≠ 30.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+  /api/event-types/{id}/slots:
+    get:
+      operationId: PublicEventTypes_slots
+      summary: |-
+        Сетка слотов на конкретный день.
+        Возвращаются ВСЕ 30-минутные слоты рабочего дня (06:00–22:00 MSK),
+        с пометкой free/busy. Серверная проверка:
+        - дата входит в 14-дневное окно (сегодня..сегодня+13), иначе slot_outside_window;
+        - start_at >= текущего момента, иначе слот помечается busy;
+        - на start_at нет существующего бронирования, иначе busy.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: date
+          in: query
+          required: true
+          description: Дата в формате YYYY-MM-DD. Должна быть в окне сегодня..сегодня+13.
+          schema:
+            type: string
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Slot'
+        '404':
+          description: Ресурс не найден (например, неизвестный id типа события).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '422':
+          description: |-
+            Ошибка валидации запроса или нарушение бизнес-правила занятости/окна:
+            - validation_failed — поле запроса не прошло проверку (формат email, длина имени и т.п.);
+            - slot_outside_window — выбранная дата вне 14-дневного окна;
+            - slot_outside_hours — время вне 06:00–22:00 MSK;
+            - slot_in_past — start_at уже в прошлом;
+            - invalid_duration — duration_minutes ≠ 30.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+  /api/owner/bookings:
+    get:
+      operationId: OwnerBookings_list
+      summary: |-
+        Список предстоящих бронирований владельца.
+        Возвращает записи со start_at >= текущего момента по всем типам событий,
+        отсортированные по start_at по возрастанию.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminBooking'
+  /api/owner/event-types:
+    get:
+      operationId: OwnerEventTypes_list
+      summary: Список типов событий владельца
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventType'
+    post:
+      operationId: OwnerEventTypes_create
+      summary: Создать тип события. duration_minutes должен быть равен 30.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '422':
+          description: |-
+            Ошибка валидации запроса или нарушение бизнес-правила занятости/окна:
+            - validation_failed — поле запроса не прошло проверку (формат email, длина имени и т.п.);
+            - slot_outside_window — выбранная дата вне 14-дневного окна;
+            - slot_outside_hours — время вне 06:00–22:00 MSK;
+            - slot_in_past — start_at уже в прошлом;
+            - invalid_duration — duration_minutes ≠ 30.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeInput'
+  /api/owner/event-types/{id}:
+    get:
+      operationId: OwnerEventTypes_get
+      summary: Получить свой тип события для редактирования
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: Ресурс не найден (например, неизвестный id типа события).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+    put:
+      operationId: OwnerEventTypes_update
+      summary: Полное обновление типа события (id остаётся прежним, duration_minutes — 30).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: Ресурс не найден (например, неизвестный id типа события).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '422':
+          description: |-
+            Ошибка валидации запроса или нарушение бизнес-правила занятости/окна:
+            - validation_failed — поле запроса не прошло проверку (формат email, длина имени и т.п.);
+            - slot_outside_window — выбранная дата вне 14-дневного окна;
+            - slot_outside_hours — время вне 06:00–22:00 MSK;
+            - slot_in_past — start_at уже в прошлом;
+            - invalid_duration — duration_minutes ≠ 30.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeInput'
+    delete:
+      operationId: OwnerEventTypes_delete
+      summary: Удалить тип события. Возвращает 204 при успехе. Удаление не отменяет уже созданные бронирования.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        '404':
+          description: Ресурс не найден (например, неизвестный id типа события).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+components:
+  schemas:
+    AdminBooking:
+      type: object
+      required:
+        - id
+        - event_type_id
+        - event_type_name
+        - guest_name
+        - guest_email
+        - start_at
+        - end_at
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        event_type_id:
+          type: integer
+          format: int64
+        event_type_name:
+          type: string
+        guest_name:
+          type: string
+        guest_email:
+          type: string
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      description: |-
+        Элемент списка бронирований, который видит владелец календаря в админке.
+        Один тип события в списке не разворачивается — хватает id и name
+        для отрисовки таблицы предстоящих встреч.
+    BookingConfirmation:
+      type: object
+      required:
+        - id
+        - event_type
+        - guest_name
+        - guest_email
+        - start_at
+        - end_at
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        event_type:
+          allOf:
+            - $ref: '#/components/schemas/EventType'
+          description: Развёрнутый тип события, по которому оформлена запись.
+        guest_name:
+          type: string
+        guest_email:
+          type: string
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      description: |-
+        Подтверждение успешно созданного бронирования. Единый источник правды
+        для гостя — отдельного эндпоинта для повторного просмотра нет.
+    BookingRequest:
+      type: object
+      required:
+        - guest_name
+        - guest_email
+        - start_at
+      properties:
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        guest_email:
+          type: string
+          format: email
+        start_at:
+          type: string
+          format: date-time
+          description: Желаемое начало встречи, UTC ISO 8601 с offset.
+      description: Запрос на создание бронирования.
+    ErrorBody:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+      description: |-
+        Тело ответа с ошибкой.
+        details — массив ошибок по полям запроса. Присутствует в основном для 422,
+        но поле опционально для единообразия.
+    ErrorCode:
+      type: string
+      enum:
+        - validation_failed
+        - slot_outside_window
+        - slot_outside_hours
+        - slot_in_past
+        - slot_taken
+        - event_type_not_found
+        - booking_not_found
+        - invalid_duration
+        - internal_error
+    EventType:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - duration_minutes
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        duration_minutes:
+          type: integer
+          format: int32
+          description: Длительность встречи в минутах. В v1 допускается только значение 30.
+      description: |-
+        Шаблон встречи, на которую записывается гость.
+        Принадлежит единственному владельцу календаря (id владельца = 1, создаётся сидом).
+    EventTypeInput:
+      type: object
+      required:
+        - name
+        - description
+        - duration_minutes
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        duration_minutes:
+          type: integer
+          format: int32
+      description: |-
+        Тело для создания и обновления типа события владельцем.
+        duration_minutes в v1 строго равен 30, иначе сервер вернёт 422 invalid_duration.
+    FieldError:
+      type: object
+      required:
+        - field
+        - messages
+      properties:
+        field:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      description: Описание ошибки валидации по конкретному полю запроса.
+    NotFoundError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+      description: Ресурс не найден (например, неизвестный id типа события).
+    Slot:
+      type: object
+      required:
+        - start_at
+        - end_at
+        - status
+      properties:
+        start_at:
+          type: string
+          format: date-time
+          description: Начало слота, UTC ISO 8601 с offset.
+        end_at:
+          type: string
+          format: date-time
+          description: Конец слота, UTC ISO 8601 с offset. Всегда start_at + duration_minutes (30 минут в v1).
+        status:
+          $ref: '#/components/schemas/SlotStatus'
+      description: |-
+        Слот в сетке 30 минут на конкретную календарную дату.
+        Время хранится в UTC ISO 8601 с offset; локальное отображение — Europe/Moscow.
+    SlotConflictError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+      description: 'Конфликт занятости: на этот start_at уже существует бронирование.'
+    SlotStatus:
+      type: string
+      enum:
+        - free
+        - busy
+    ValidationError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+      description: |-
+        Ошибка валидации запроса или нарушение бизнес-правила занятости/окна:
+        - validation_failed — поле запроса не прошло проверку (формат email, длина имени и т.п.);
+        - slot_outside_window — выбранная дата вне 14-дневного окна;
+        - slot_outside_hours — время вне 06:00–22:00 MSK;
+        - slot_in_past — start_at уже в прошлом;
+        - invalid_duration — duration_minutes ≠ 30.
+servers:
+  - url: http://localhost:8000
+    description: Local backend
+    variables: {}

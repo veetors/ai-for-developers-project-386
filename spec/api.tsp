@@ -5,10 +5,7 @@ import "@typespec/openapi";
 using TypeSpec.Http;
 using TypeSpec.Rest;
 
-@service({
-  title: "Booking Service API",
-  version: "0.1.0",
-})
+@service(#{ title: "Booking Service API" })
 @server("http://localhost:8000", "Local backend")
 namespace BookingService;
 
@@ -148,7 +145,7 @@ model ErrorBody {
 @error
 @doc("Ресурс не найден (например, неизвестный id типа события).")
 model NotFoundError {
-  @status status: 404;
+  @statusCode status: 404;
   error: ErrorBody;
 }
 
@@ -162,14 +159,14 @@ model NotFoundError {
 - invalid_duration — duration_minutes ≠ 30.
 """)
 model ValidationError {
-  @status status: 422;
+  @statusCode status: 422;
   error: ErrorBody;
 }
 
 @error
 @doc("Конфликт занятости: на этот start_at уже существует бронирование.")
 model SlotConflictError {
-  @status status: 409;
+  @statusCode status: 409;
   error: ErrorBody;
 }
 
