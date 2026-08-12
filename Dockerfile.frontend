@@ -1,0 +1,23 @@
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+COPY spec/generated/openapi.yaml /app/contract/openapi.yaml
+
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+# Generate TS types directly from the bundled contract (avoid npm run gen:api,
+# which resolves `../spec/generated/openapi.yaml` relative to /app).
+RUN npx openapi-typescript /app/contract/openapi.yaml -o src/api/generated/schema.d.ts \
+    && npx tsc -b \
+    && npx vite build
+
+FROM nginxinc/nginx-unprivileged:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]

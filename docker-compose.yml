@@ -1,0 +1,80 @@
+services:
+  frontend:
+    image: booking-service-frontend:dev
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: /api
+    profiles: [default]
+    ports:
+      - "3000:8080"
+    depends_on:
+      - backend
+    networks:
+      - booking
+    environment:
+      VITE_API_BASE_URL: /api
+
+  frontend-prism:
+    image: booking-service-frontend:dev
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: /api
+    profiles: [frontend-only]
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./frontend/nginx.prism.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - prism
+    networks:
+      - booking
+
+  backend:
+    image: booking-service-backend:dev
+    build:
+      context: ./backend
+    profiles: [default]
+    expose:
+      - "8000"
+    networks:
+      - booking
+
+  db:
+    image: postgres:16-alpine
+    profiles: [default]
+    environment:
+      POSTGRES_DB: booking
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: booking
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - booking
+
+  prism:
+    image: stoplight/prism:4
+    profiles: [frontend-only]
+    command:
+      - "mock"
+      - "/contracts/openapi.yaml"
+      - "--port"
+      - "4010"
+      - "--host"
+      - "0.0.0.0"
+    volumes:
+      - ./spec/generated/openapi.yaml:/contracts/openapi.yaml:ro
+    expose:
+      - "4010"
+    networks:
+      - booking
+
+networks:
+  booking:
+    driver: bridge
+
+volumes:
+  db-data:

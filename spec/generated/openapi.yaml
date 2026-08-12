@@ -431,6 +431,11 @@ components:
       description: |-
         Шаблон встречи, на которую записывается гость.
         Принадлежит единственному владельцу календаря (id владельца = 1, создаётся сидом).
+      example:
+        id: 1
+        name: Встреча 30 минут
+        description: Базовый тип события для бронирования.
+        duration_minutes: 30
     EventTypeInput:
       type: object
       required:
