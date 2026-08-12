@@ -1,0 +1,8 @@
+node_modules
+.venv
+.git
+.gitignore
+.opencode
+spec/node_modules
+**/.DS_Store
+**/*.log
