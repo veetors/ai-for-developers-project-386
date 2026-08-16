@@ -16,9 +16,12 @@ def _insert_booking(
     guest_email: str = "ann@example.com",
 ) -> None:
     end_at = start_at + timedelta(minutes=30)
+    et = app_registry.event_types.get(event_type_id)
+    assert et is not None
     booking_draft = Booking(
         id=0,
         event_type_id=event_type_id,
+        event_type_name=et.name,
         guest_name=guest_name,
         guest_email=guest_email,
         start_at=start_at,
@@ -72,7 +75,7 @@ def test_admin_list_after_event_type_delete_keeps_rows(
     rows = client.get("/api/owner/bookings").json()
     assert len(rows) == 1
     assert rows[0]["event_type_id"] == et["id"]
-    assert rows[0]["event_type_name"] == "<удалён>"
+    assert rows[0]["event_type_name"] == "Soon gone"
 
 
 def test_admin_list_empty_by_default(client):

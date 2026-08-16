@@ -53,6 +53,7 @@ def test_taken_slot_marked_busy(client, make_event_type, frozen_clock, fixed_now
     booking = Booking(
         id=booking_id,
         event_type_id=et["id"],
+        event_type_name=et["name"],
         guest_name="Ann",
         guest_email="ann@example.com",
         start_at=target_dt,

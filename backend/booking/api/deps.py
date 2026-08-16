@@ -28,7 +28,6 @@ def get_slot_service() -> SlotService:
 
 def get_booking_service() -> BookingService:
     return BookingService(
-        event_types=app_registry.event_types,
         bookings=app_registry.bookings,
         event_type_service=get_event_type_service(),
         clock=timeutils.now_utc,

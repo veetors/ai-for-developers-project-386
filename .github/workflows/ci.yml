@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  contract:
+    name: Spec / contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: spec/package-lock.json
+
+      - name: Install dependencies
+        working-directory: spec
+        run: npm ci
+
+      - name: Compile TypeSpec
+        working-directory: spec
+        run: npm run compile
+
+      - name: Verify generated OpenAPI is committed
+        run: git diff --exit-code spec/generated/openapi.yaml
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Generate API types
+        working-directory: frontend
+        run: npm run gen:api
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm run test:unit
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - name: Install dependencies
+        working-directory: backend
+        run: poetry install
+
+      - name: Ruff
+        working-directory: backend
+        run: poetry run ruff check .
+
+      - name: Pytest
+        working-directory: backend
+        run: poetry run pytest
+
+  e2e:
+    name: E2E (real stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run acceptance tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/test-results/
+          retention-days: 7

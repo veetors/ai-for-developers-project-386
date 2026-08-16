@@ -2,6 +2,8 @@
 .envrc
 .DS_Store
 spec/node_modules/
+node_modules/
+.husky/_/
 
 # Python bytecode / caches
 __pycache__/
@@ -13,3 +15,4 @@ __pycache__/
 # Local artifacts
 .opencode/
 opencode.json
+spec/screenshots_examples/

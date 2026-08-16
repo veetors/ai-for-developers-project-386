@@ -97,6 +97,7 @@ class InMemoryBookingRepo:
             new = Booking(
                 id=self._next_id,
                 event_type_id=booking.event_type_id,
+                event_type_name=booking.event_type_name,
                 guest_name=booking.guest_name,
                 guest_email=booking.guest_email,
                 start_at=booking.start_at,
@@ -120,6 +121,7 @@ class InMemoryBookingRepo:
             saved = Booking(
                 id=self._next_id,
                 event_type_id=booking.event_type_id,
+                event_type_name=booking.event_type_name,
                 guest_name=booking.guest_name,
                 guest_email=booking.guest_email,
                 start_at=booking.start_at,
