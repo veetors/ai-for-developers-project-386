@@ -75,6 +75,11 @@ docker compose --profile default up
 - Все производные «сегодня» и «граница 14 дней» используют `date-fns-tz` c `Europe/Moscow`.
 - UI‑компоненты — копия shadcn/ui в [`src/components/ui/`](frontend/src/components/ui/). Никаких глобальных state‑менеджеров сверх TanStack Query + React Context.
 
+## CI и релизы
+
+- `.github/workflows/ci.yml` — интеграционные проверки на каждый PR к `main` и push в `main`: компиляция TypeSpec-контракта, линт/typecheck/юнит‑тесты/сборка фронтенда, ruff/pytest бэкенда, e2e‑тесты Playwright против реального стека (`docker compose --profile default`).
+- `release-please` (`.github/workflows/release-please.yml`) — после мёржа в `main` создаёт/обновляет release‑PR с `CHANGELOG.md` и предложенной версией (conventional commits); после мёржа release‑PR формирует тег `vX.Y.Z` и GitHub Release.
+
 ## Статус
 
-Реализовано: SPA, API‑слой, юнит‑тесты (Vitest), e2e (Playwright), Docker‑конфигурация. См. [`docs/devlog/0001-frontend-impl.md`](docs/devlog/0001-frontend-impl.md) для подробностей.
+Реализовано: SPA, API‑слой, юнит‑тесты (Vitest), e2e (Playwright), Docker‑конфигурация, CI и автоматические релизы через release-please. См. [`docs/devlog/0001-frontend-impl.md`](docs/devlog/0001-frontend-impl.md) и [`docs/devlog/0006-ci-and-release-please.md`](docs/devlog/0006-ci-and-release-please.md).
