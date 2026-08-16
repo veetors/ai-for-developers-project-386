@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0](https://github.com/veetors/ai-for-developers-project-386/compare/booking-service-v0.2.0...booking-service-v0.3.0) (2026-08-16)
+
+
+### Features
+
+* **docker:** build production image serving SPA + API on $PORT ([d68f2fa](https://github.com/veetors/ai-for-developers-project-386/commit/d68f2fa85b365dda4fce5ec3833b5d9062e4050a))
+
+
+### Documentation
+
+* add published app link to README ([8c7e10a](https://github.com/veetors/ai-for-developers-project-386/commit/8c7e10ac45bda79b59141366f0f0634f068daa25))
+* document Render deployment (devlog + README) ([d35303f](https://github.com/veetors/ai-for-developers-project-386/commit/d35303f7a6a93626b91dc740a837562b9cfdc255))
+* sync AGENTS.md with production Dockerfile ([f2f14f1](https://github.com/veetors/ai-for-developers-project-386/commit/f2f14f138c4c9544c52d69ef4dbfc0f31984c1eb))
+* sync README and architecture specs with acceptance tests and production image ([f23cfbd](https://github.com/veetors/ai-for-developers-project-386/commit/f23cfbdcfac5aded690f0611a931c5e063dcdb84))
+
+
+### Miscellaneous Chores
+
+* **deploy:** add Render deployment blueprint ([280d13a](https://github.com/veetors/ai-for-developers-project-386/commit/280d13a8c82b291553f1de8e7f9ec06e83d4deee))
+
 ## [0.2.0](https://github.com/veetors/ai-for-developers-project-386/compare/booking-service-v0.1.0...booking-service-v0.2.0) (2026-08-16)
 
 
