@@ -5,6 +5,8 @@
 frontend‑архитектура — [`spec/02-frontend-architecture.md`](spec/02-frontend-architecture.md);
 контракт API — [`spec/api.tsp`](spec/api.tsp) → [`spec/generated/openapi.yaml`](spec/generated/openapi.yaml).
 
+Деплой: [https://booking-service-3k4r.onrender.com](https://booking-service-3k4r.onrender.com)
+
 ## Структура репозитория
 
 ```
@@ -100,9 +102,9 @@ services:
 Проверка после деплоя:
 
 ```bash
-curl -s https://<service>.onrender.com/                  # 200 SPA
-curl -s https://<service>.onrender.com/healthz           # {"status": "ok"}
-curl -s https://<service>.onrender.com/api/event-types   # 200 JSON
+curl -s https://booking-service-3k4r.onrender.com/                  # 200 SPA
+curl -s https://booking-service-3k4r.onrender.com/healthz           # {"status": "ok"}
+curl -s https://booking-service-3k4r.onrender.com/api/event-types   # 200 JSON
 ```
 
 Авто‑деплой на каждый push в `main`. Примечание: на free‑плане сервис засыпает
@@ -141,4 +143,4 @@ curl -s https://<service>.onrender.com/api/event-types   # 200 JSON
 
 ## Статус
 
-Реализовано: SPA, API‑слой, юнит‑тесты (Vitest), e2e (Playwright), Docker‑конфигурация, CI и автоматические релизы через release-please, деплой на Render (Blueprint). См. [`docs/devlog/0001-frontend-impl.md`](docs/devlog/0001-frontend-impl.md), [`docs/devlog/0006-ci-and-release-please.md`](docs/devlog/0006-ci-and-release-please.md) и [`docs/devlog/0010-render-deploy.md`](docs/devlog/0010-render-deploy.md).
+Реализовано: SPA, API‑слой, юнит‑тесты (Vitest), e2e (Playwright), Docker‑конфигурация, CI и автоматические релизы через release-please, деплой на Render (Blueprint). Публичное приложение: [https://booking-service-3k4r.onrender.com](https://booking-service-3k4r.onrender.com). См. [`docs/devlog/0001-frontend-impl.md`](docs/devlog/0001-frontend-impl.md), [`docs/devlog/0006-ci-and-release-please.md`](docs/devlog/0006-ci-and-release-please.md) и [`docs/devlog/0010-render-deploy.md`](docs/devlog/0010-render-deploy.md).
