@@ -10,6 +10,7 @@
 - `frontend/` — SPA на React 18 + Vite 5 + TanStack Query + shadcn/ui. `npm install`. Node-стек зафиксирован на **Node LTS 24** (CI, `Dockerfile.frontend`, `@types/node` ^24) — не понижай.
 - `backend/` — Django 6 + django-ninja + pydantic v2, Poetry, Python 3.14. `poetry install`.
 - Корневой `package.json` — **только husky/commitlint** (без app-кода, без `type: module`). `npm install` в корне лишь ставит commit-хук.
+- Корневые артефакты сборки/деплоя: `Dockerfile` (продакшен-образ, см. Docker), `nginx.conf.template`, `docker-entrypoint.sh`.
 - Команды фронта запускай из `frontend/`, команды бэка — из `backend/`. Из корня репозитория ничего app-ориентированного не запускается.
 
 ## Поток контракт → кодогенерация (важен порядок)
@@ -22,6 +23,8 @@
 4. Опциональная smoke-проверка: `npm run mock:contract` (поднимает Prism, дёргает `GET /api/event-types`).
 
 Сгенерированный TS-схемы в git нет. На свежем чекауте `npm run typecheck` упадёт, пока не отработает `gen:api`. `npm run build` сам запускает `gen:api`; `npm run typecheck` — **нет**, на чистом дереве сначала выполни `npm run gen:api`.
+
+Исключение — корневой `Dockerfile`: в его build-контексте нет `spec/`, поэтому TS-типы генерируются напрямую `npx openapi-typescript` из скопированного `spec/generated/openapi.yaml` (без `npm run gen:api`).
 
 ## Frontend (`frontend/`)
 
@@ -53,7 +56,7 @@
 - Нужен Python 3.14 (`.envrc` использует direnv + pyenv 3.14.6). `poetry install`.
 - `poetry run pytest` — тесты в `booking/tests` (`pytest.ini` задаёт `DJANGO_SETTINGS_MODULE=config.settings`). Один тест: `poetry run pytest booking/tests/test_slot_grid.py` или `-k "name"`.
 - `poetry run ruff check .` / `poetry run ruff format .` — запуск из `backend/`. (`backend/README.md` показывает `poetry run ruff check backend` — это работает только из корня репозитория, где у Poetry нет проекта; используй `cd backend && poetry run ruff check .`.)
-- Dev: `poetry run uvicorn config.asgi:application --reload --port 8000`. Prod (как в Docker): `uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --proxy-headers`.
+- Dev: `poetry run uvicorn config.asgi:application --reload --port 8000`. Prod в `backend/Dockerfile` — через `docker-entrypoint.sh` (exec-`ENTRYPOINT`), который читает `$PORT` (дефолт 8000) и exec'ит `uvicorn config.asgi:application --host 0.0.0.0 --port "$PORT" --proxy-headers`. В корневом продакшен-образе uvicorn слушает unix-сокет `/tmp/booking-api.sock`, а не host:port (см. Docker).
 
 ### Архитектура
 - Точка входа `config/urls.py`: одна `NinjaAPI`, два роутера (`/api/event-types` public, `/api/owner` owner). Глобальные обработчики приводят все ошибки (вкл. `ninja.errors.ValidationError`) к `{ error: { code, message, details } }`.
@@ -75,6 +78,7 @@
 Два compose-профиля — `docker compose up` без профиля не поднимает ничего.
 - `docker compose --profile frontend-only up` — frontend (:3000→8080, nginx проксирует `/api` на Prism) + Prism (:4010). Без бэкенда. Полезно для ручной проверки SPA без своего Django.
 - `docker compose --profile default up` — frontend (:3000, nginx) + backend (:8000 внутри сети) + postgres:16. nginx проксирует `/api` на `backend:8000`. Этот же backend используется в `npm run test:e2e` (см. раздел Frontend).
+- Корневой multi-stage `Dockerfile` — продакшен-образ с полным стеком в одном контейнере: nginx отдаёт SPA и проксирует `/api` и `/healthz` на Django-API, слушающий unix-сокет `/tmp/booking-api.sock` (исключает коллизию портов при любом `PORT`). Внешний порт — `$PORT` (дефолт 8000). Сборка/запуск: `docker build -t booking-service .` → `docker run --rm -p 8080:8080 -e PORT=8080 booking-service`. Вход — `docker-entrypoint.sh`: uvicorn `--uds` → wait-ready через curl → `envsubst '${PORT}'` рендерит `nginx.conf.template` → `exec nginx -g 'daemon off;'`. Образ не участвует в compose-профилях и в CI не собирается.
 
 ## Переменные окружения, влияющие на dev-флоу
 - `VITE_API_BASE_URL` (по умолчанию `/api`).
