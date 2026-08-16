@@ -1,0 +1,14 @@
+{
+  "name": "booking-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo root for booking service (frontend, backend, spec).",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "husky": "^9.1.7"
+  }
+}

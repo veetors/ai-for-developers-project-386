@@ -2,6 +2,8 @@
 .envrc
 .DS_Store
 spec/node_modules/
+node_modules/
+.husky/_/
 
 # Python bytecode / caches
 __pycache__/
