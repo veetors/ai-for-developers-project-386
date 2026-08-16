@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: booking-service
+    runtime: docker
+    branch: main
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "0"
