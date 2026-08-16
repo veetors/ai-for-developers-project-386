@@ -10,18 +10,19 @@ frontend‑архитектура — [`spec/02-frontend-architecture.md`](spec/
 ```
 spec/                    # источник правды: PRD, контракт OpenAPI, скриншоты
 frontend/                # SPA (React 18 + Vite 5 + TanStack Query + shadcn/ui)
-backend/                 # (опционально, появится в следующей итерации)
+backend/                 # Django API (Django 6 + django-ninja + pydantic v2, in-memory)
 docker-compose.yml       # два compose‑профиля: default и frontend-only
+Dockerfile               # корневой продакшен‑образ (SPA + API в одном контейнере)
 docs/devlog/             # журнал заметок по задачам
 ```
 
 ## Запуск
 
-### A. Только фронт + мок Prisma (без бэкенда)
+### A. Только фронт + мок Prism (без бэкенда)
 ```bash
 cd spec && npm install && npm run compile
 cd ../frontend && npm install
-npm run mock &      # Prism на http://localhost:4010
+npx -y @stoplight/prism-cli mock ../spec/generated/openapi.yaml --port 4010 --dynamic &
 npm run dev         # Vite dev на http://localhost:5173 с прокси /api → 4010
 ```
 
@@ -30,7 +31,8 @@ npm run dev         # Vite dev на http://localhost:5173 с прокси /api �
 ```bash
 npm run test:unit         # vitest, 20 тестов
 npm run build && npm run preview  # production preview на :4173
-npm run test:e2e          # Playwright e2e (5 сценариев через page.route)
+npm run test:e2e          # Playwright acceptance против реального backend
+                          # (поднимает docker compose --profile default; нужен npm run build)
 ```
 
 ### B. Только фронт + мок в Docker
@@ -41,7 +43,7 @@ docker compose --profile frontend-only up
 # - prism             — мок API на :4010
 ```
 
-### C. Полный стек (после реализации backend)
+### C. Полный стек
 ```bash
 docker compose --profile default up
 # Поднимется:
@@ -66,13 +68,14 @@ docker run --rm -p 8080:8080 -e PORT=8080 booking-service
 |---|---|---|
 | `VITE_API_BASE_URL` | Базовый путь API на клиенте | `/api` |
 | `API_PROXY_TARGET`  | Куда Vite‑proxy пересылает `/api` во время dev/preview | `http://localhost:4010` |
+| `PORT`              | Порт корневого продакшен‑образа (nginx) | `8000` |
 
 В Docker nginx обслуживает `/api` через свой `proxy_pass` (композиция выбирает между `backend:8000` и `prism:4010`).
 
 ## Основные npm‑скрипты (`frontend/`)
 
 - `npm run dev` — Vite dev c proxy на Prism
-- `npm run mock` — `prism mock ../spec/generated/openapi.yaml --port 4010 --dynamic`
+- `npm run mock:contract` — smoke‑проверка контракта (поднимает Prism, дёргает `GET /api/event-types`)
 - `npm run gen:api` — перегенерация `src/api/generated/schema.d.ts`
 - `npm run build` — `gen:api && tsc -b && vite build`
 - `npm run preview` — production preview на :4173

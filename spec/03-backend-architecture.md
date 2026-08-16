@@ -8,7 +8,7 @@
 
 ## 1. Контекст и принципы
 
-- Бэкенд — самостоятельный сервис Docker, порт `8000`. Поднимается отдельно от фронта; фронт ходит к нему по `/api` либо напрямую в dev, либо через `nginx` из compose-profile `full`.
+- Бэкенд — самостоятельный сервис Docker (compose‑профиль `default`). Поднимается вместе с фронтом; фронт ходит к нему по `/api` либо напрямую в dev, либо через `nginx` из compose‑профиля `default`. Отдельный продакшен‑вариант — корневой multi‑stage `Dockerfile` (nginx + SPA + API в одном контейнере).
 - Единственный клиент — SPA из `02-frontend-architecture.md`. Других потребителей не предполагается, поэтому никакой другой публичной документации сверх `spec/api.tsp` не публикуем.
 - На этом шаге **нет БД**. Хранилище — оперативная память одного процесса; перезапуск контейнера = сброс данных. Все данные идут через интерфейсы `Repository`; на следующем шаге они заменяются на Django ORM без изменений сервисного и транспортного слоя.
 - Все бизнес-правила (окно 14 дней, рабочие часы 06:00–22:00 MSK, занятость, длительность 30 минут, валидация контактов) реализуются **только** на сервере. Фронт лишь отображает `status: free|busy`.
@@ -27,10 +27,10 @@
 | REST | **django-ninja** | декларативные роутеры, pydantic v2-схемы, авто-OpenAPI |
 | Валидация | **pydantic v2** (`Field(min_length, max_length, EmailStr)`) | guest_email, длина name, duration |
 | CORS | `django-cors-headers` | для локального фронт-dev |
-| HTTP-серверы | **uvicorn** (ASGI, dev) и **gunicorn** (WSGI, prod) | разделение dev/prod |
+| HTTP-серверы | **uvicorn** (ASGI) — dev и Docker‑прод (через `docker-entrypoint.sh`, `$PORT`); gunicorn (WSGI) в образах не используется | разделение dev/prod |
 | Тесты | **pytest + pytest-django** (только) | API tests |
 | Линт/формат | ruff, ruff-format | единый стиль |
-| Контейнеризация | Dockerfile multi-stage, compose | деплой |
+| Контейнеризация | `backend/Dockerfile` (compose) + корневой multi-stage `Dockerfile` | деплой |
 
 DRF не используется. pydantic не применяется в доменном слое — там остаются `@dataclass(frozen=True)`.
 
@@ -43,6 +43,7 @@ backend/
 ├── pyproject.toml
 ├── poetry.lock
 ├── Dockerfile
+├── docker-entrypoint.sh            # exec-ENTRYPOINT: uvicorn на $PORT (дефолт 8000)
 ├── .dockerignore
 ├── ruff.toml
 ├── pytest.ini
@@ -52,8 +53,8 @@ backend/
 │   ├── __init__.py
 │   ├── settings.py                    # SECRET_KEY, DEBUG, ALLOWED_HOSTS, INSTALLED_APPS, CORS
 │   ├── urls.py                        # подключает public.router + owner.router → один NinjaAPI
-│   ├── wsgi.py                        # gunicorn
-│   └── asgi.py                        # uvicorn в dev
+│   ├── wsgi.py                        # sync-stack (gunicorn вне Docker)
+│   └── asgi.py                        # uvicorn: dev и Docker-прод
 └── booking/                           # основной доменный Django-app
     ├── __init__.py
     ├── apps.py                        # AppConfig.ready() → bootstrap репозиториев + seed Owner
@@ -443,7 +444,7 @@ def handle_pydantic_validation(request, exc):
 
 - `config/settings.py`: минимальные INSTALLED_APPS: `django.contrib.contenttypes` (нужен некоторым частям Django internals, но без таблиц — `databases["default"] = {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}` или явно пустой engine; не критично, миграций нет), `corsheaders`, `booking.apps.BookingConfig`.
 - `BookingConfig.ready()` создаёт `app_registry` с `Owner` (id=1, name="Host", tz="Europe/Moscow"), чистыми репозиториями, общим `lock`. Без сидов демо-типов (создаются владельцем через API).
-- `ALLOWED_HOSTS = ["*"]` в dev; `"backend"` в compose-profile `full`.
+- `ALLOWED_HOSTS = ["*"]` в dev; `"backend"` в compose-профиле `default`.
 
 ---
 
@@ -458,7 +459,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 application = get_asgi_application()
 ```
 
-`config/wsgi.py` — для gunicorn (то же содержимое, только sync-stack).
+`config/wsgi.py` — sync-stack (для gunicorn вне Docker).
 
 Dev (вне Docker): **uvicorn**
 
@@ -468,13 +469,21 @@ uvicorn config.asgi:application --reload --host 0.0.0.0 --port 8000
 
 (`runserver` Django-вариант остаётся доступным, но в README указываем uvicorn как основной путь: ASGI даёт корректный `openapi.json` и быстрее под reload.)
 
-Prod (Docker CMD):
+Prod в Docker — через `docker-entrypoint.sh` (exec-`ENTRYPOINT` в `backend/Dockerfile`):
 
 ```
-gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-2}
+uvicorn config.asgi:application --host 0.0.0.0 --port "$PORT" --proxy-headers
 ```
 
-`Dockerfile` — multi-stage на `python:3.14-slim`, Poetry install (`--no-dev`), копирование исходников, `EXPOSE 8000`.
+(`$PORT`, дефолт 8000; `EXPOSE 8000` информационно.)
+
+`backend/Dockerfile` — multi-stage на `python:3.14-slim`, Poetry export → `pip wheel` → установка колёс, копирование исходников.
+
+Отдельный продакшен‑образ всего стека — корневой `Dockerfile`: nginx отдаёт SPA и
+проксирует `/api` и `/healthz` на Django‑API, который слушает unix‑сокет
+`/tmp/booking-api.sock` (исключает коллизию с `listen $PORT`). Вход —
+`docker-entrypoint.sh`: uvicorn `--uds` → wait‑ready через curl → `envsubst
+'${PORT}'` → `nginx -g 'daemon off;'`.
 
 ---
 

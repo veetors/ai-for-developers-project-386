@@ -17,21 +17,26 @@ poetry run pytest
 # dev-сервер на http://localhost:8000 (uvicorn, с авто-reload)
 poetry run uvicorn config.asgi:application --reload --port 8000
 
-# prod-сервер (gunicorn, как в Docker)
-poetry run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2
+# prod в Docker — через docker-entrypoint.sh (exec-ENTRYPOINT в backend/Dockerfile):
+# uvicorn config.asgi:application --host 0.0.0.0 --port "$PORT" --proxy-headers (PORT, дефолт 8000)
 
-# линтинг и форматирование
-poetry run ruff check backend
-poetry run ruff format backend
+# линтинг и форматирование (из backend/)
+poetry run ruff check .
+poetry run ruff format .
 ```
 
 ## Docker
+
+`backend/Dockerfile` — отдельный образ API на `$PORT` (дефолт 8000), вход — `docker-entrypoint.sh` (exec-`ENTRYPOINT`).
 
 ```bash
 docker compose --profile default up backend
 # или весь стек:
 docker compose --profile default up
 ```
+
+Полный стек в одном контейнере (nginx + SPA + API) — корневой `Dockerfile`,
+см. README репозитория (раздел «Продакшен-образ»).
 
 ## Структура
 

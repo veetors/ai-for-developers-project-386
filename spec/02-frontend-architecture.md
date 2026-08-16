@@ -29,11 +29,11 @@
 | Типы API | openapi‑typescript | `src/api/generated/schema.d.ts` |
 | Формы | react‑hook‑form + zod | `src/features/**/BookingDraft*.tsx`, `*Form.tsx` |
 | Дата/время | `Intl.DateTimeFormat` + `date-fns-tz` (только MSK) | `src/api/time.ts`, `src/lib/formatters.ts` |
-| Мок API | Stoplight Prism CLI | dev‑режим, Playwright |
+| Мок API | Stoplight Prism CLI | dev‑режим, ручной smoke |
 | Юнит‑тесты | Vitest + @testing-library/react | `tests/unit/` |
-| E2E | Playwright | `tests/e2e/` |
+| E2E | Playwright | `tests/acceptance/` (против реального Django через docker compose) |
 | Линт/формат | ESLint (typescript-eslint), Prettier | корень |
-| Контейнеризация | Dockerfile multi‑stage, nginx, docker compose | `frontend/Dockerfile`, `nginx.conf`, корень |
+| Контейнеризация | compose-профили + корневой multi-stage `Dockerfile` | `Dockerfile.frontend`, `frontend/nginx.conf`, корневой `Dockerfile`/`nginx.conf.template`/`docker-entrypoint.sh` |
 
 Дополнительных зависимостей сверх списка не вводится.
 
@@ -44,19 +44,20 @@
 | Режим | Сервисы | Upstream для `/api` |
 |---|---|---|
 | **A. Frontend‑only dev** | Vite + Prism | Vite proxy → `http://localhost:4010` |
-| **B. Playwright E2E** | Vite preview + Prism | Тот же proxy в Vite preview |
+| **B. Playwright acceptance** | real stack (`docker compose --profile default`) | nginx внутри `frontend` → `http://backend:8000` |
 | **C. Полный стек (compose)** | `frontend` + `backend` + `db` | nginx внутри `frontend` → `http://backend:8000` |
+| **D. Продакшен‑образ** | nginx + Django в одном контейнере | nginx → unix‑сокет API (`/tmp/booking-api.sock`) |
 
 `VITE_API_BASE_URL=/api` всегда — конкретный upstream выбирает proxy. В коде клиента нет условных веток «real/mock».
 
 ### Профили docker compose
 
-- `default` / `full`: `frontend`, `backend`, `db` — полный стек.
+- `default`: `frontend`, `backend`, `db` — полный стек.
 - `frontend-only`: `frontend`, `prism` — разработка без бэкенда по контракту.
 
 Переключение:
 ```bash
-docker compose up                       # полный стек
+docker compose --profile default up     # полный стек
 docker compose --profile frontend-only up   # только фронт + мок
 ```
 
@@ -66,10 +67,8 @@ docker compose --profile frontend-only up   # только фронт + мок
 
 ```
 frontend/
-├── Dockerfile
-├── docker-entrypoint.sh
-├── nginx.conf                    # /api proxy_pass backend:8000
-├── nginx.prism.conf              # опционально для профиля frontend-only
+├── nginx.conf                    # /api proxy_pass backend:8000 (compose)
+├── nginx.prism.conf              # proxy_pass prism:4010 (профиль frontend-only)
 ├── package.json
 ├── vite.config.ts
 ├── playwright.config.ts
@@ -350,32 +349,34 @@ new QueryClient({
 - `server.host = true`.
 - `server.proxy['/api']`:
   - если задан `process.env.API_PROXY_TARGET` — проксирует туда;
-  - иначе — `http://localhost:4010` (Prism, режим A/B по умолчанию).
+  - иначе — `http://localhost:4010` (Prism, режим A по умолчанию).
 - Запуск Dev: `vite` читает `.env.development` (`VITE_API_BASE_URL=/api`).
 
-### 9.2. `frontend/Dockerfile` (multi‑stage)
+### 9.2. `Dockerfile.frontend` (образ фронта для compose)
 
 ```dockerfile
 FROM node:24-alpine AS build
 WORKDIR /app
-COPY package*.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
-COPY . .
+COPY frontend/ ./
+COPY spec/generated/openapi.yaml ./contract/openapi.yaml
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-RUN npm run build
+RUN npx openapi-typescript ./contract/openapi.yaml -o src/api/generated/schema.d.ts \
+    && npx tsc -b \
+    && npx vite build
 
-FROM nginxinc/nginx-unprivileged:alpine
+FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 ```
 
-`nginx.conf`:
+`frontend/nginx.conf`:
 - `try_files $uri /index.html` для SPA fallback.
 - `location /api/ { proxy_pass http://backend:8000; }` для compose.
 
-Опциональный `nginx.prism.conf` подключается в профиле `frontend-only` (`proxy_pass http://prism:4010;`).
+Опциональный `frontend/nginx.prism.conf` подключается в профиле `frontend-only` (`proxy_pass http://prism:4010;`).
 
 ### 9.3. `docker-compose.yml`
 
@@ -383,65 +384,80 @@ EXPOSE 80
 services:
   frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: Dockerfile.frontend
       args:
         VITE_API_BASE_URL: /api
-    ports: ["3000:80"]
+    profiles: [default]
+    ports: ["3000:8080"]
     depends_on: [backend]
-    profiles: ["full", "default"]
 
   backend:
-    # Django (Poetry), 8000, internal
-    profiles: ["full", "default"]
+    build:
+      context: ./backend
+    profiles: [default]
 
   db:
-    # PostgreSQL
-    profiles: ["full", "default"]
+    image: postgres:16-alpine
+    profiles: [default]
 
   prism:
-    image: stoplight/prism:5
+    image: stoplight/prism:4
     command: ["mock", "/contracts/openapi.yaml", "--port", "4010", "--host", "0.0.0.0"]
     volumes:
       - ./spec/generated/openapi.yaml:/contracts/openapi.yaml:ro
-    ports: ["4010:4010"]
     profiles: ["frontend-only"]
 ```
 
 Запуск:
-- `docker compose up` — full stack.
+- `docker compose --profile default up` — full stack.
 - `docker compose --profile frontend-only up` — фронт + мок.
+
+Отдельно от compose — корневой multi-stage `Dockerfile` (продакшен‑образ: nginx +
+SPA + Django в одном контейнере, порт `$PORT`, `/api` и `/healthz` через nginx на
+unix‑сокет `/tmp/booking-api.sock`): `docker build -t booking-service .` →
+`docker run --rm -p 8080:8080 -e PORT=8080 booking-service`.
 
 ### 9.4. Ручной dev вне Docker
 
 - `cd spec && npm run compile` (генерация `openapi.yaml`).
-- `cd frontend && npm run mock` — Prism на `4010`.
+- `npx -y @stoplight/prism-cli mock ../spec/generated/openapi.yaml --port 4010 --dynamic` — Prism на `4010`.
 - В другом терминале `cd frontend && npm run dev` — Vite на `5173`, прокси `/api` → `4010`.
 
 Если поднят реальный Django:
-- `npm run dev` с переменной `API_PROXY_TARGET=http://localhost:8000 npm run dev`.
+- `API_PROXY_TARGET=http://localhost:8000 npm run dev`.
 
 ---
 
-## 10. Playwright и Prism
+## 10. Playwright и acceptance‑тесты
 
 ### 10.1. Архитектура тестов
 
 `playwright.config.ts`:
-- `webServer` — `npm run preview -- --port 4173` (тот же Vite‑билд, что и в Docker).
-- `globalSetup` стартует Prism через `child_process.spawn('npx', ['@stoplight/prism-cli', 'mock', '../spec/generated/openapi.yaml', '--port', '4010', '--dynamic'])`, ждёт `await waitForHttp('http://localhost:4010/api/event-types')`, по завершении тестов шлёт `SIGTERM`.
-- `.env.production`: `VITE_API_BASE_URL=/api` — для `vite preview`.
+- `testDir` — `tests/acceptance/`.
+- `webServer` — `docker compose --profile default up -d --build --wait backend frontend db`; фронт доступен на `http://localhost:3000` (nginx проксирует `/api` на `backend:8000` внутри сети compose).
+- `globalSetup` — полный reset стека (`down -v` перед `up`) и проверка готовности через `http://localhost:3000/api/event-types`.
+- Тесты используют `request` и `page.goto('/...')` без `page.route()` — все запросы идут по цепочке `Browser → localhost:3000 (nginx) → backend:8000`.
 
 ### 10.2. Сценарии
 
 | ID | Файл | Сценарий |
 |---|---|---|
-| 1 | `public-booking.spec.ts` | home → catalog → event-type → date → slot → form → success; проверка полей `BookingConfirmation` в МСК. |
-| 2 | `public-slot-conflict.spec.ts` | Два контекста Playwright на одной дате/слоте: первый создаёт бронь, второй видит `409` → после рефетча слот `busy`. |
-| 3 | (дополнительно) вне окна | Выбор даты за пределами 14 дней — кнопки выбора дизейблены; запрос напрямую к API Prism вне окна — 422, тост. |
-| 4 | `admin-event-types.spec.ts` | Создание, редактирование, удаление через `AlertDialog`. После удаления запись исчезает из `/admin/event-types`. |
-| 5 | `admin-bookings.spec.ts` | После сценария 1 запись появляется в `/admin/bookings` с правильным МСК‑временем. |
+| G1 | `US-G1-home-to-catalog.spec.ts` | home → каталог типов событий. |
+| G4 | `US-G4-out-of-window-calendar.spec.ts` | Выбор даты за пределами окна 14 дней — недоступно; календарь ограничивает диапазон. |
+| G5 | `US-G5-public-happy-path.spec.ts` | Создание брони: каталог → тип → слот → форма → успех; проверка подтверждения в МСК. |
+| G6 | `US-G6-slot-conflict-409.spec.ts` | Два клиента на одной дате/слоте: второй получает `409` → после рефетча слот `busy`. |
+| G7 | `US-G7-public-validation.spec.ts` | Валидация контактов/длительности в публичной форме. |
+| INT1 | `US-INT1-full-flow.spec.ts` | Сквозной флоу гость + админ. |
+| O1 | `US-O1-admin-bookings-list.spec.ts` | Список будущих броней админа с корректным МСК‑временем. |
+| O2 | `US-O2-admin-create-event-type.spec.ts` | Создание типа события админом. |
+| O3 | `US-O3-admin-edit-delete.spec.ts` | Редактирование и удаление через `AlertDialog`; после удаления запись исчезает из каталога. |
+| O4 | `US-O4-admin-bookings-after-delete.spec.ts` | Поведение броней после удаления типа события. |
 
-`prism --dynamic` отдаёт дефолтные примеры из схемы; для воспроизводимости теста 2 тест‑сценарий делает POST, а затем GET в одном тесте — состояние «занят» сохраняется в памяти инстанса Prism до его перезапуска.
+Состояние «занят» хранится в in‑memory репозитории реального Django: для
+воспроизводимости конфликта (G6) тест делает POST, затем GET в одном тесте.
+После тестов стек сбрасывается `docker compose down -v` (рестарт = пустое
+хранилище).
 
 ---
 
@@ -449,7 +465,7 @@ services:
 
 1. **TZ браузера vs МСК.** Все «сегодня» и «окно 14 дней» только через `Intl` с `timeZone: 'Europe/Moscow'`. Запрещено использовать `new Date()` и `Date.now()` как момент «сейчас» в бизнес‑логике.
 2. **Гонка за слот.** Решается атомарной проверкой на сервере плюс `invalidate(['public','slots', id, date])` на фронте после 409. Никаких оптимистичных апдейтов у фронта — статус идёт только от сервера.
-3. **Prism `--dynamic` и детерминизм.** Тесты внутри одной сессии используют один инстанс Prism и явно создают занятость в тесте, а не полагаются на случайную выдачу.
+3. **Детерминизм acceptance‑тестов.** Каждый прогон стартует с чистого состояния (`globalSetup` делает `down -v` перед `up`), занятость создаётся в самом тесте (G6). Тесты не параллелятся (`workers: 1`).
 4. **`sessionStorage["booking:last"]`.** Хранит `BookingConfirmation` только пока пользователь идёт по success‑странице. На F5 без возврата — нет отдельного эндпоинта «посмотреть бронь» в v1, поведение принимается.
 5. **`@openapi` ↔ код.** Любое изменение `spec/api.tsp` → перегенерация `schema.d.ts` → проверка компиляции → опционально ручной smoke `npm run mock:contract`.
 6. **`duration_minutes` в форме админа.** Поле readonly со значением `30`. Если в v2 потребуются варианты — расширяется только после соответствующего изменения бэкенда и `api.tsp`.
@@ -459,20 +475,20 @@ services:
 ## 12. План реализации
 
 1. Инициализация Vite + React + TS + Tailwind + shadcn init.
-2. Скрипты `gen:api`, `mock`, `mock:contract`; первый проход `npm run gen:api`.
+2. Скрипты `gen:api`, `mock:contract`; первый проход `npm run gen:api`.
 3. API‑слой: `client.ts`, `errors.ts`, `time.ts`, `formatters.ts`. Smoke‑вызовы против mock‑Prism.
 4. `QueryClient`, base‑хуки (`useEventTypes`, `useAdminEventTypes`).
 5. Public pages: Home → Catalog → Slot picker → Form → Success.
 6. Admin pages: Bookings → EventTypes CRUD.
 7. Dockerfile + nginx.conf + compose‑профили.
-8. Playwright + Prism global setup; прогон e2e.
-9. Линт/билд финальный проход; фиксация `npm run preview` + `npm run mock` как основных команд для запуска без Docker.
+8. Playwright acceptance против реального backend (docker compose); прогон e2e.
+9. Линт/билд финальный проход; фиксация `npm run preview` + `npm run mock:contract` как основных команд для запуска без Docker.
 
 Чек‑лист перед «готов к деплою»:
 - [ ] `npm run build` собирается чисто (без TS‑ошибок и ESLint warnings).
 - [ ] `npm run test:unit` зелёный.
-- [ ] `npm run test:e2e` против Prism зелёный.
-- [ ] `docker compose up` стартует весь стек (frontend, backend, db) end‑to‑end.
+- [ ] `npm run test:e2e` против реального backend зелёный.
+- [ ] `docker compose --profile default up` стартует весь стек (frontend, backend, db) end‑to‑end.
 - [ ] `docker compose --profile frontend-only up` стартует frontend + Prism и позволяет пройти основной сценарий гостя и админа.
 
 ---
@@ -480,7 +496,7 @@ services:
 ## 13. Открытые вопросы / последующие улучшения
 
 - **`@example` в `api.tsp`.** Для красивых карточек и слотов в режиме A (Prism без бэкенда) желательно добавить `@example` для `EventType` и `Slot` (например, «Встреча 30 минут», 2–3 слота с разными статусами). Это косметика контракта, в текущей редакции `api.tsp` отсутствует. Можно отложить отдельной задачей.
-- **E2E acceptance против реального Django.** В этом документе e2e прогоняется на Prism. При необходимости «истинных» acceptance‑тестов добавляется второй конфиг `playwright.acceptance.config.ts`, который стартует `docker compose up backend db` вместо Prism.
+- ~~**E2E acceptance против реального Django.**~~ ✅ Реализовано: `tests/acceptance/` против реального стека (`docker compose --profile default`), см. раздел 10.
 
 ---
 
