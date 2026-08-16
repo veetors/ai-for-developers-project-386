@@ -12,7 +12,7 @@
    - `Backend` — Poetry 2.4.1 + Python 3.14: `poetry install` → `ruff check .` → `pytest`;
    - `E2E (real stack)` — `npm run test:e2e`: все acceptance-тесты Playwright (включая US-G5/INT1 — основной сценарий бронирования) против реального стека `docker compose --profile default` (nginx → backend:8000), Chromium ставится через `npx playwright install --with-deps chromium`, при падении загружается артефакт `frontend/test-results/`.
 2. **Release-please** — одна версия на весь репозиторий:
-   - `.release-please-config.json` — `release-type: node`, `bump-minor-pre-major: true`, явные `changelog-sections`;
+   - `release-please-config.json` — `release-type: node`, `bump-minor-pre-major: true`, явные `changelog-sections`;
    - `.release-please-manifest.json` — `{ ".": "0.1.0" }` (текущая версия корневого пакета);
    - `.github/workflows/release-please.yml` — `google-github-actions/release-please-action@v4` на `push` в `main` с `permissions: contents: write, pull-requests: write`.
 
@@ -21,7 +21,7 @@
 ## 📝 Изменённые файлы
 1. `.github/workflows/ci.yml` — новый: 4 джобы (contract, frontend, backend, e2e)
 2. `.github/workflows/release-please.yml` — новый: release-please-action на push в main
-3. `.release-please-config.json` — новый: конфиг single-package release-please
+3. `release-please-config.json` — новый: конфиг single-package release-please
 4. `.release-please-manifest.json` — новый: текущая версия `0.1.0`
 5. `README.md` — раздел «CI и релизы», обновлён «Статус»
 
