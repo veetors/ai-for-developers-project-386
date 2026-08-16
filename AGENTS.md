@@ -7,7 +7,7 @@
 Три независимых пакета, у каждого свои зависимости — общего install в корне нет.
 
 - `spec/` — контракт TypeSpec, источник правды. `npm install` + `npm run compile`.
-- `frontend/` — SPA на React 18 + Vite 5 + TanStack Query + shadcn/ui. `npm install`.
+- `frontend/` — SPA на React 18 + Vite 5 + TanStack Query + shadcn/ui. `npm install`. Node-стек зафиксирован на **Node LTS 24** (CI, `Dockerfile.frontend`, `@types/node` ^24) — не понижай.
 - `backend/` — Django 6 + django-ninja + pydantic v2, Poetry, Python 3.14. `poetry install`.
 - Корневой `package.json` — **только husky/commitlint** (без app-кода, без `type: module`). `npm install` в корне лишь ставит commit-хук.
 - Команды фронта запускай из `frontend/`, команды бэка — из `backend/`. Из корня репозитория ничего app-ориентированного не запускается.
@@ -29,7 +29,7 @@
 - `npm run dev` — Vite на :5173, проксирует `/api` на `API_PROXY_TARGET` (по умолчанию Prism :4010). Для ручной отладки против бэкенда: `API_PROXY_TARGET=http://localhost:8000 npm run dev`.
 - `npm run test:unit` / `:watch`. Один тест: `npx vitest run tests/unit/slots.spec.ts` или `-t "name"`.
 - `npm run test:e2e` — Playwright acceptance против реального backend. **Сначала нужен `npm run build`**: webServer поднимает `docker compose --profile default up -d --build --wait backend frontend db`; фронтенд доступен на `http://localhost:3000` (nginx в контейнере `frontend` проксирует `/api` на `backend:8000` внутри сети). `globalSetup` делает полный reset (`down -v` перед `up`) и проверяет готовность через `http://localhost:3000/api/event-types`. Тесты используют `request` и `page.goto('/...')` без `page.route()` — все запросы идут через цепочку `Browser → localhost:3000 (nginx) → backend:8000`. Один тест: `npx playwright test tests/acceptance/US-G5-public-happy-path.spec.ts` или `-g "name"`.
-- `npm run mock:contract` — ручная smoke-проверка контракта OpenAPI (поднимает Prism, дёргает `GET /api/event-types`); для CI не нужна.
+- `npm run mock:contract` — ручная smoke-проверка контракта OpenAPI (поднимает Prism через `npx -y @stoplight/prism-cli` — в devDependencies его нет, дёргает `GET /api/event-types`); для CI не нужна.
 - `npm run lint` / `format` (prettier) / `typecheck` (`tsc -b --noEmit`).
 
 ### Порядок проверок
@@ -53,7 +53,7 @@
 - Нужен Python 3.14 (`.envrc` использует direnv + pyenv 3.14.6). `poetry install`.
 - `poetry run pytest` — тесты в `booking/tests` (`pytest.ini` задаёт `DJANGO_SETTINGS_MODULE=config.settings`). Один тест: `poetry run pytest booking/tests/test_slot_grid.py` или `-k "name"`.
 - `poetry run ruff check .` / `poetry run ruff format .` — запуск из `backend/`. (`backend/README.md` показывает `poetry run ruff check backend` — это работает только из корня репозитория, где у Poetry нет проекта; используй `cd backend && poetry run ruff check .`.)
-- Dev: `poetry run uvicorn config.asgi:application --reload --port 8000`. Prod (как в Docker): `gunicorn config.wsgi:application`.
+- Dev: `poetry run uvicorn config.asgi:application --reload --port 8000`. Prod (как в Docker): `uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --proxy-headers`.
 
 ### Архитектура
 - Точка входа `config/urls.py`: одна `NinjaAPI`, два роутера (`/api/event-types` public, `/api/owner` owner). Глобальные обработчики приводят все ошибки (вкл. `ninja.errors.ValidationError`) к `{ error: { code, message, details } }`.
@@ -65,7 +65,9 @@
 - `booking/errors.py:ErrorCode` должен совпадать с `frontend/src/api/types.ts:ErrorCode` — это один и тот же wire-контракт.
 
 ## Git и CI
-- Conventional Commits проверяются **локально** хуком husky `commit-msg` + commitlint (`@commitlint/config-conventional`). Типичные scope: `frontend`, `backend`. Merge-коммиты пропускаются. В CI не проверяется.
+- Conventional Commits проверяются **локально** хуком husky `commit-msg` + commitlint (`@commitlint/config-conventional`). Типичные scope: `frontend`, `backend`. Merge-коммиты пропускаются. В CI commitlint не запускается.
+- `.github/workflows/ci.yml` — на каждый PR к `main` и push в `main` 4 независимые джобы: `Spec / contract` (`npm ci` + compile + страж `git diff --exit-code spec/generated/openapi.yaml`, т.е. сгенерированный контракт обязан быть закоммичен), `Frontend` (`gen:api` → `lint` → `typecheck` → `test:unit` → `build`), `Backend` (`poetry install` → `ruff check .` → `pytest`), `E2E` (`npm run test:e2e` против `docker compose --profile default`).
+- `.github/workflows/release-please.yml` + `.release-please-config.json` / `.release-please-manifest.json` — release-please на push в `main`: единый release-PR с `CHANGELOG.md` (версия из conventional commits), после мёржа release-PR — тег `vX.Y.Z` и GitHub Release.
 - `.github/workflows/hexlet-check.yml` автогенерируется Hexlet — **не редактировать и не удалять**.
 - `.opencode/` и `opencode.json` в `.gitignore` (локальный конфиг OpenCode); `opencode.json` сейчас включает shadcn MCP.
 
