@@ -50,6 +50,16 @@ docker compose --profile default up
 # - db (postgres:16)    — БД
 ```
 
+### D. Продакшен-образ (полный стек в одном контейнере)
+Корневой `Dockerfile` собирает SPA и API в один образ: nginx отдаёт фронтенд и
+проксирует `/api` на локальный Django-API. Порт задаётся переменной `PORT`
+(по умолчанию `8000`):
+```bash
+docker build -t booking-service .
+docker run --rm -p 8080:8080 -e PORT=8080 booking-service
+# http://localhost:8080 — SPA, http://localhost:8080/api/event-types — API
+```
+
 ## Переменные окружения
 
 | ENV | Назначение | Значение по умолчанию |

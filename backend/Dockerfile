@@ -36,15 +36,15 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels -r /tmp/requireme
 COPY manage.py ./
 COPY config ./config
 COPY booking ./booking
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
     CMD curl -fsS "http://localhost:${PORT}/api/event-types" || exit 1
 
-CMD ["uvicorn", "config.asgi:application", \
-    "--host", "0.0.0.0", \
-    "--port", "8000", \
-    "--proxy-headers"]
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 
