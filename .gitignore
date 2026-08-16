@@ -2,3 +2,14 @@
 .envrc
 .DS_Store
 spec/node_modules/
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Local artifacts
+.opencode/
+opencode.json
