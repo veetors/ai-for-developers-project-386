@@ -1,17 +1,24 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
-const PORT = 4173;
+const COMPOSE_URL = 'http://localhost:3000'
 
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './tests/acceptance',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
   reporter: 'list',
   timeout: 30_000,
+  globalSetup: './tests/acceptance/global-setup.ts',
+  webServer: {
+    command: 'docker compose --profile default up -d --build --wait backend frontend db',
+    url: COMPOSE_URL,
+    timeout: 240_000,
+    reuseExistingServer: !process.env.CI,
+  },
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    baseURL: COMPOSE_URL,
     trace: 'retain-on-failure',
     actionTimeout: 10_000,
   },
@@ -21,15 +28,4 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: `npm run preview -- --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-    env: {
-      VITE_API_BASE_URL: '/api',
-      API_PROXY_TARGET: 'http://127.0.0.1:4010',
-    },
-  },
-  globalSetup: './tests/e2e/global-setup.ts',
-});
+})

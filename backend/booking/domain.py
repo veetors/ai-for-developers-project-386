@@ -33,6 +33,7 @@ class Booking:
 
     id: int
     event_type_id: int
+    event_type_name: str  # snapshot of the event type's name at booking time
     guest_name: str
     guest_email: str
     start_at: datetime  # tz-aware UTC

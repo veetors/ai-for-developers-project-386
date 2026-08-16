@@ -11,7 +11,6 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "gen:api": "openapi-typescript ../spec/generated/openapi.yaml -o src/api/generated/schema.d.ts",
-    "mock": "prism mock ../spec/generated/openapi.yaml --port 4010 --host 0.0.0.0 --dynamic",
     "mock:contract": "node ./tests/contract-smoke.mjs",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
@@ -43,7 +42,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",
-    "@stoplight/prism-cli": "^5.14.2",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",

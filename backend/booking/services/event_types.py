@@ -29,7 +29,7 @@ class EventTypeService:
     def get(self, id: int) -> EventType:
         et = self._repo.get(id)
         if et is None:
-            raise AppError(ErrorCode.EVENT_TYPE_NOT_FOUND, f"EventType {id} not found.")
+            raise AppError(ErrorCode.EVENT_TYPE_NOT_FOUND, "Тип события не найден.")
         return et
 
     def create(self, data: EventTypeIn) -> EventType:
@@ -55,16 +55,16 @@ class EventTypeService:
         )
         updated = self._repo.update(new)
         if updated is None:
-            raise AppError(ErrorCode.EVENT_TYPE_NOT_FOUND, f"EventType {id} not found.")
+            raise AppError(ErrorCode.EVENT_TYPE_NOT_FOUND, "Тип события не найден.")
         return updated
 
     def delete(self, id: int) -> None:
         if not self._repo.delete(id):
-            raise AppError(ErrorCode.EVENT_TYPE_NOT_FOUND, f"EventType {id} not found.")
+            raise AppError(ErrorCode.EVENT_TYPE_NOT_FOUND, "Тип события не найден.")
 
     def _assert_duration(self, duration_minutes: int) -> None:
         if duration_minutes != ALLOWED_DURATION_MINUTES:
             raise AppError(
                 ErrorCode.INVALID_DURATION,
-                "duration_minutes must be 30 in v1.",
+                "Длительность должна быть 30 минут.",
             )

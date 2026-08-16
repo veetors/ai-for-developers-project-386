@@ -34,7 +34,7 @@ class SlotService:
         if event_type is None:
             raise AppError(
                 ErrorCode.EVENT_TYPE_NOT_FOUND,
-                f"EventType {event_type_id} not found.",
+                "Тип события не найден.",
             )
 
         try:
@@ -42,7 +42,7 @@ class SlotService:
         except ValueError as exc:
             raise AppError(
                 ErrorCode.VALIDATION_FAILED,
-                str(exc),
+                f"Некорректная дата '{date_ymd}', ожидается YYYY-MM-DD.",
             ) from exc
 
         now = self._clock()
@@ -50,7 +50,7 @@ class SlotService:
         if target < win_start or target > win_end:
             raise AppError(
                 ErrorCode.SLOT_OUTSIDE_WINDOW,
-                "Date is outside the 14-day booking window.",
+                "Дата вне доступного окна (14 дней).",
             )
 
         slots: list[Slot] = []

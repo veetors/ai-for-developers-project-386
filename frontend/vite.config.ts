@@ -1,6 +1,17 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'node:path';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import http from 'node:http'
+import path from 'node:path'
+
+const apiProxyConfig = {
+  target: process.env.API_PROXY_TARGET ?? 'http://localhost:4010',
+  changeOrigin: true,
+  // Disable keep-alive on the upstream socket so the proxy handles
+  // `Connection: close` from the backend with a single-pass read; avoids
+  // 'Data after Connection: close' parser errors when many short requests
+  // hit the same upstream within one proxy session.
+  agent: new http.Agent({ keepAlive: false }),
+}
 
 export default defineConfig({
   plugins: [react()],
@@ -14,10 +25,7 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     proxy: {
-      '/api': {
-        target: process.env.API_PROXY_TARGET ?? 'http://localhost:4010',
-        changeOrigin: true,
-      },
+      '/api': apiProxyConfig,
     },
   },
   preview: {
@@ -25,13 +33,10 @@ export default defineConfig({
     port: 4173,
     strictPort: false,
     proxy: {
-      '/api': {
-        target: process.env.API_PROXY_TARGET ?? 'http://localhost:4010',
-        changeOrigin: true,
-      },
+      '/api': apiProxyConfig,
     },
   },
   build: {
     sourcemap: true,
   },
-});
+})

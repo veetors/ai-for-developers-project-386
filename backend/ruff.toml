@@ -4,6 +4,9 @@ target-version = "py313"
 [lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM", "PL", "RUF"]
 ignore = ["PLR2004"]
+# Russian UI strings legitimately contain Cyrillic letters (С/с/М/К) and the
+# en-dash that Unicode-data flags as confusable with ASCII.
+allowed-confusables = ["с", "С", "М", "К", "–"]
 
 [format]
 quote-style = "double"

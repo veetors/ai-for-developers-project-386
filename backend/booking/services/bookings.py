@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from booking.domain import Booking, EventType
+from booking.domain import Booking
 from booking.errors import AppError, ErrorCode
-from booking.repositories.base import BookingRepo, EventTypeRepo
+from booking.repositories.base import BookingRepo
 from booking.services.event_types import EventTypeService
 from booking.timeutils import (
     duration_minutes_for,
@@ -30,19 +30,16 @@ class AdminBookingRow:
     """Joined row for the admin list — kept flat to match AdminBookingOut."""
 
     booking: Booking
-    event_type: EventType | None
     event_type_name: str
 
 
 class BookingService:
     def __init__(
         self,
-        event_types: EventTypeRepo,
         bookings: BookingRepo,
         event_type_service: EventTypeService,
         clock: Callable[[], datetime],
     ) -> None:
-        self._event_types = event_types
         self._bookings = bookings
         self._event_type_service = event_type_service
         self._clock = clock
@@ -54,7 +51,7 @@ class BookingService:
         if start_at.tzinfo is None:
             raise AppError(
                 ErrorCode.VALIDATION_FAILED,
-                "start_at must include a UTC offset (ISO 8601 with timezone).",
+                "start_at должен содержать UTC-смещение (ISO 8601 с таймзоной).",
             )
 
         now = self._clock()
@@ -69,6 +66,7 @@ class BookingService:
         draft = Booking(
             id=0,
             event_type_id=event_type.id,
+            event_type_name=event_type.name,
             guest_name=request.guest_name,
             guest_email=request.guest_email,
             start_at=start_at,
@@ -79,23 +77,21 @@ class BookingService:
         if booking is None:
             raise AppError(
                 ErrorCode.SLOT_TAKEN,
-                "Slot is already booked.",
+                "Слот только что заняли. Выберите другое время.",
             )
         return booking
 
     def list_upcoming_admin(self) -> list[AdminBookingRow]:
-        rows: list[AdminBookingRow] = []
-        for b in self._bookings.list_upcoming(self._clock()):
-            et = self._event_types.get(b.event_type_id)
-            name = et.name if et is not None else "<удалён>"
-            rows.append(AdminBookingRow(booking=b, event_type=et, event_type_name=name))
-        return rows
+        return [
+            AdminBookingRow(booking=b, event_type_name=b.event_type_name)
+            for b in self._bookings.list_upcoming(self._clock())
+        ]
 
     def _assert_future(self, start_at: datetime, now: datetime) -> None:
         if start_at < now:
             raise AppError(
                 ErrorCode.SLOT_IN_PAST,
-                "Selected slot is already in the past.",
+                "Это время уже прошло.",
             )
 
     def _assert_in_window(self, start_at: datetime, now: datetime) -> None:
@@ -104,12 +100,12 @@ class BookingService:
         if local_date < win_start or local_date > win_end:
             raise AppError(
                 ErrorCode.SLOT_OUTSIDE_WINDOW,
-                "Date is outside the 14-day booking window.",
+                "Дата вне доступного окна (14 дней).",
             )
 
     def _assert_in_work_hours(self, start_at: datetime) -> None:
         if not is_within_work_hours_msk(start_at):
             raise AppError(
                 ErrorCode.SLOT_OUTSIDE_HOURS,
-                "Time is outside working hours 06:00-22:00 MSK.",
+                "Время вне рабочего диапазона 06:00–22:00 МСК.",
             )

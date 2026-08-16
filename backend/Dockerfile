@@ -42,8 +42,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
     CMD curl -fsS "http://localhost:${PORT}/api/event-types" || exit 1
 
-CMD ["gunicorn", "config.wsgi:application", \
-    "--bind", "0.0.0.0:8000", \
-    "--workers", "1", \
-    "--access-logfile", "-", \
-    "--error-logfile", "-"]
+CMD ["uvicorn", "config.asgi:application", \
+    "--host", "0.0.0.0", \
+    "--port", "8000", \
+    "--proxy-headers"]
+
+

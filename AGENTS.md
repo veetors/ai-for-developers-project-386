@@ -26,10 +26,10 @@
 ## Frontend (`frontend/`)
 
 ### Команды
-- `npm run dev` — Vite на :5173, проксирует `/api` на `API_PROXY_TARGET` (по умолчанию Prism :4010). Параллельно запусти `npm run mock`.
-- `npm run mock` — Prism-мок на :4010 из `../spec/generated/openapi.yaml`.
+- `npm run dev` — Vite на :5173, проксирует `/api` на `API_PROXY_TARGET` (по умолчанию Prism :4010). Для ручной отладки против бэкенда: `API_PROXY_TARGET=http://localhost:8000 npm run dev`.
 - `npm run test:unit` / `:watch`. Один тест: `npx vitest run tests/unit/slots.spec.ts` или `-t "name"`.
-- `npm run test:e2e` — Playwright. **Сначала нужен `npm run build`**: `webServer` запускает `vite preview` (раздаёт `dist/`); globalSetup также поднимает Prism на :4010. Тесты мокают API через `page.route()`, поэтому детерминированы. Один тест: `npx playwright test tests/e2e/admin-bookings.spec.ts` или `-g "name"`.
+- `npm run test:e2e` — Playwright acceptance против реального backend. **Сначала нужен `npm run build`**: webServer поднимает `docker compose --profile default up -d --build --wait backend frontend db`; фронтенд доступен на `http://localhost:3000` (nginx в контейнере `frontend` проксирует `/api` на `backend:8000` внутри сети). `globalSetup` делает полный reset (`down -v` перед `up`) и проверяет готовность через `http://localhost:3000/api/event-types`. Тесты используют `request` и `page.goto('/...')` без `page.route()` — все запросы идут через цепочку `Browser → localhost:3000 (nginx) → backend:8000`. Один тест: `npx playwright test tests/acceptance/US-G5-public-happy-path.spec.ts` или `-g "name"`.
+- `npm run mock:contract` — ручная smoke-проверка контракта OpenAPI (поднимает Prism, дёргает `GET /api/event-types`); для CI не нужна.
 - `npm run lint` / `format` (prettier) / `typecheck` (`tsc -b --noEmit`).
 
 ### Порядок проверок
@@ -71,9 +71,9 @@
 
 ## Docker
 Два compose-профиля — `docker compose up` без профиля не поднимает ничего.
-- `docker compose --profile frontend-only up` — frontend (:3000→8080, nginx проксирует `/api` на Prism) + Prism (:4010). Без бэкенда.
-- `docker compose --profile default up` — frontend + backend (:8000) + postgres:16. nginx проксирует `/api` на `backend:8000`.
+- `docker compose --profile frontend-only up` — frontend (:3000→8080, nginx проксирует `/api` на Prism) + Prism (:4010). Без бэкенда. Полезно для ручной проверки SPA без своего Django.
+- `docker compose --profile default up` — frontend (:3000, nginx) + backend (:8000 внутри сети) + postgres:16. nginx проксирует `/api` на `backend:8000`. Этот же backend используется в `npm run test:e2e` (см. раздел Frontend).
 
 ## Переменные окружения, влияющие на dev-флоу
 - `VITE_API_BASE_URL` (по умолчанию `/api`).
-- `API_PROXY_TARGET` — куда Vite-прокси шлёт `/api`; по умолчанию `http://localhost:4010` (Prism). Для полного стека локально без Docker укажи реальный бэкенд (напр. `http://localhost:8000`).
+- `API_PROXY_TARGET` — куда Vite-прокси шлёт `/api`; по умолчанию `http://localhost:4010` (Prism, используется `frontend-only` compose-профиль). Для полного стека локально без Docker укажи реальный бэкенд (напр. `http://localhost:8000`). Acceptance-тесты поднимают свой backend через docker compose (см. раздел Frontend), эта переменная для них не используется.
