@@ -67,7 +67,7 @@
 ## Git и CI
 - Conventional Commits проверяются **локально** хуком husky `commit-msg` + commitlint (`@commitlint/config-conventional`). Типичные scope: `frontend`, `backend`. Merge-коммиты пропускаются. В CI commitlint не запускается.
 - `.github/workflows/ci.yml` — на каждый PR к `main` и push в `main` 4 независимые джобы: `Spec / contract` (`npm ci` + compile + страж `git diff --exit-code spec/generated/openapi.yaml`, т.е. сгенерированный контракт обязан быть закоммичен), `Frontend` (`gen:api` → `lint` → `typecheck` → `test:unit` → `build`), `Backend` (`poetry install` → `ruff check .` → `pytest`), `E2E` (`npm run test:e2e` против `docker compose --profile default`).
-- `.github/workflows/release-please.yml` + `.release-please-config.json` / `.release-please-manifest.json` — release-please на push в `main`: единый release-PR с `CHANGELOG.md` (версия из conventional commits), после мёржа release-PR — тег `vX.Y.Z` и GitHub Release.
+- `.github/workflows/release-please.yml` + `release-please-config.json` / `.release-please-manifest.json` — release-please на push в `main`: единый release-PR с `CHANGELOG.md` (версия из conventional commits), после мёржа release-PR — тег `vX.Y.Z` и GitHub Release.
 - `.github/workflows/hexlet-check.yml` автогенерируется Hexlet — **не редактировать и не удалять**.
 - `.opencode/` и `opencode.json` в `.gitignore` (локальный конфиг OpenCode); `opencode.json` сейчас включает shadcn MCP.
 
